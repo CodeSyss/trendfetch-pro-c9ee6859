@@ -267,55 +267,36 @@ serve(async (req) => {
           return matchTemporada && matchCategoria && matchTienda;
         });
 
-        // 1) Intentar ScraperAPI primero (método principal)
+        // Intentar ScraperAPI (método principal)
         let rawHtml = '';
         const SCRAPERAPI_KEY = Deno.env.get('SCRAPERAPI_KEY');
         
-        if (SCRAPERAPI_KEY) {
-          try {
-            console.log(`🔧 Using ScraperAPI for ${url}...`);
-            // ScraperAPI con render activado para JavaScript y rotación de proxies premium
-            const scraperUrl = `http://api.scraperapi.com/?api_key=${SCRAPERAPI_KEY}&url=${encodeURIComponent(url)}&render=true&premium=true`;
-            const scraperResp = await fetch(scraperUrl);
-            
-            if (scraperResp.ok) {
-              rawHtml = await scraperResp.text();
-              console.log(`✅ ScraperAPI success, HTML length: ${rawHtml.length}`);
-            } else {
-              console.error(`❌ ScraperAPI error: ${scraperResp.status}`);
-            }
-          } catch (e) {
-            console.error('❌ ScraperAPI failed:', e);
-          }
+        if (!SCRAPERAPI_KEY) {
+          console.error('❌ SCRAPERAPI_KEY no configurada');
+          return { url, products: [], storeName };
         }
 
-        // 2) Fallback a fetch normal si ScraperAPI falla o no está disponible
-        if (!rawHtml || rawHtml.length < 5000) {
-          console.log('⚠️ ScraperAPI failed or unavailable, trying normal fetch...');
-          try {
-            const acceptLang = language === 'en' ? 'en-US,en;q=0.9' : language === 'zh' ? 'zh-CN,zh;q=0.9,en;q=0.7' : 'es-ES,es;q=0.9,en;q=0.8';
-            const resp = await fetch(url, {
-              headers: {
-                'User-Agent': getRandomUserAgent(),
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                'Accept-Language': acceptLang,
-                'Cache-Control': 'no-cache',
-                'Referer': new URL(url).origin,
-              },
-              redirect: 'follow',
-            });
-            if (resp.ok) {
-              rawHtml = await resp.text();
-              console.log(`✅ Normal fetch success, HTML length: ${rawHtml.length}`);
-            }
-          } catch (e) {
-            console.error('❌ Normal fetch also failed:', e);
+        try {
+          console.log(`🔧 Using ScraperAPI for ${url}...`);
+          // ScraperAPI con render=true para JavaScript y device_type=desktop
+          const targetUrl = encodeURIComponent(url);
+          const scraperUrl = `http://api.scraperapi.com/?api_key=${SCRAPERAPI_KEY}&url=${targetUrl}&render=true&device_type=desktop`;
+          const scraperResp = await fetch(scraperUrl);
+          
+          if (!scraperResp.ok) {
+            console.error(`❌ ScraperAPI error: ${scraperResp.status} ${scraperResp.statusText}`);
+            return { url, products: [], storeName };
           }
-        }
-
-        // 3) Verificar que tenemos HTML suficiente
-        if (!rawHtml || rawHtml.length < 1000) {
-          console.error(`❌ No HTML content obtained for ${url}`);
+          
+          rawHtml = await scraperResp.text();
+          console.log(`✅ ScraperAPI success, HTML length: ${rawHtml.length}`);
+          
+          if (rawHtml.length < 5000) {
+            console.error(`❌ HTML too short: ${rawHtml.length} bytes`);
+            return { url, products: [], storeName };
+          }
+        } catch (e) {
+          console.error('❌ ScraperAPI failed:', e);
           return { url, products: [], storeName };
         }
 
@@ -335,34 +316,39 @@ serve(async (req) => {
 
         const langLabel = language === 'en' ? 'English' : language === 'zh' ? '中文' : 'Español';
 
-        const systemPrompt = `Eres un analista experto en e-commerce de moda y extracción masiva de productos. Devuelve SOLO JSON válido. La explicación/recommendation debe estar en ${langLabel}. Es CRÍTICO que cada producto sea ÚNICO y DIFERENTE - no repitas productos similares.`;
-        const userPrompt = `Extrae entre 25 y 40 productos ÚNICOS Y DIFERENTES de ropa de mujer del HTML proporcionado. ESCANEA TODO EL HTML proporcionado, no te detengas en los primeros productos. Busca en todos los contenedores de grid de productos.
+        const systemPrompt = `Eres un analista experto en e-commerce especializado en Shein y sitios con lazy loading. Devuelve SOLO JSON válido. La explicación/recommendation debe estar en ${langLabel}. EXTRAE 25-40 PRODUCTOS ÚNICOS.`;
+        const userPrompt = `ANALIZA TODO EL HTML y extrae entre 25-40 productos ÚNICOS de ropa de mujer. Busca en TODOS los contenedores de productos (divs de grid, listas, etc).
 
-MANEJO DE IMÁGENES (CRÍTICO):
-- Las imágenes con lazy loading pueden estar en atributos: data-src, data-lazy-src, data-url, data-image-src, data-original
-- Si el atributo "src" contiene placeholder, transparent.gif, loading.gif o es muy pequeño (<100 bytes), busca en los atributos data-*
-- Si NO encuentras imagen válida, NO descartes el producto - déjalo con imagen vacía o placeholder
-- REGLA DE ORO: Es mejor tener el producto sin foto que no tenerlo
-- Usa baseUrl (${baseUrl}) para resolver URLs relativas
-- Las imágenes finales deben ser URLs absolutas y válidas
+🔴 IMÁGENES LAZY-LOADED (MUY IMPORTANTE):
+Shein y otras tiendas usan lazy loading. Las imágenes NO están en "src", están en:
+- data-src
+- data-lazy-src  
+- data-url
+- data-image-src
+- data-original
+- Si src empieza con "//" añade "https:" al inicio
+- Si la URL es relativa, añade baseUrl: ${baseUrl}
+- Si NO encuentras imagen, pon image: "" (NUNCA descartes el producto)
+- REGLA: Producto sin foto > No tener el producto
 
-EXTRACCIÓN MASIVA:
-- Busca TODOS los productos en el HTML, no solo los primeros
-- Objetivo: 25-40 productos únicos
-- Cada producto debe ser COMPLETAMENTE DIFERENTE (diferentes estilos, colores, tipos de prenda)
-- Prioriza VARIEDAD sobre cantidad
-- Selecciona los productos con MEJOR trend score y calidad
-- NO incluyas productos duplicados o muy similares
-- Mantén los títulos y precios tal como aparecen
+📦 EXTRACCIÓN AGRESIVA:
+- Busca en TODO el HTML (no solo primeros 10 productos)
+- Objetivo MÍNIMO: 25 productos, IDEAL: 35-40
+- Cada producto DEBE ser DIFERENTE (distintos estilos, colores, tipos)
+- Prioriza productos con mejor trend_score
+- NO repitas productos similares
+- Mantén títulos y precios originales
 
 URL: ${url}
 Base URL: ${baseUrl}
 
-PRODUCTOS REFERENCIA:\n${productosCatalogo.map(p => `• ${p.titulo} - ${p.recommendation} [${p.trend_score}/10]`).join('\n') || '• (sin referencias)'}
+PRODUCTOS REFERENCIA:
+${productosCatalogo.map(p => `• ${p.titulo} - ${p.recommendation} [${p.trend_score}/10]`).join('\n') || '• (sin referencias)'}
 
-HTML:\n${sanitizedHtml}
+HTML:
+${sanitizedHtml}
 
-Formato exacto:
+FORMATO JSON EXACTO:
 { "url": "${url}", "products": [ { "title": "..", "price": "..", "colors": [".."], "sizes": [".."], "image": "https://.." o "", "trend_score": 8.5, "recommendation": "..", "priority": "high" } ] }`;
 
         console.log(`🤖 Llamando a Lovable AI para analizar ${storeName}...`);
