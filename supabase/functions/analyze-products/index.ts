@@ -267,53 +267,56 @@ serve(async (req) => {
           return matchTemporada && matchCategoria && matchTienda;
         });
 
-        // 1) Intentar fetch normal
+        // 1) Intentar ScraperAPI primero (método principal)
         let rawHtml = '';
-        try {
-          const acceptLang = language === 'en' ? 'en-US,en;q=0.9' : language === 'zh' ? 'zh-CN,zh;q=0.9,en;q=0.7' : 'es-ES,es;q=0.9,en;q=0.8';
-          const resp = await fetch(url, {
-            headers: {
-              'User-Agent': getRandomUserAgent(),
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-              'Accept-Language': acceptLang,
-              'Cache-Control': 'no-cache',
-              'Referer': new URL(url).origin,
-            },
-            redirect: 'follow',
-          });
-          if (resp.ok) {
-            rawHtml = await resp.text();
+        const SCRAPERAPI_KEY = Deno.env.get('SCRAPERAPI_KEY');
+        
+        if (SCRAPERAPI_KEY) {
+          try {
+            console.log(`🔧 Using ScraperAPI for ${url}...`);
+            // ScraperAPI con render activado para JavaScript y rotación de proxies premium
+            const scraperUrl = `http://api.scraperapi.com/?api_key=${SCRAPERAPI_KEY}&url=${encodeURIComponent(url)}&render=true&premium=true`;
+            const scraperResp = await fetch(scraperUrl);
+            
+            if (scraperResp.ok) {
+              rawHtml = await scraperResp.text();
+              console.log(`✅ ScraperAPI success, HTML length: ${rawHtml.length}`);
+            } else {
+              console.error(`❌ ScraperAPI error: ${scraperResp.status}`);
+            }
+          } catch (e) {
+            console.error('❌ ScraperAPI failed:', e);
           }
-        } catch (e) {
-          console.log('⚠️ Normal fetch failed, will try Oxylabs if available');
         }
 
-        // 2) Fallback a Oxylabs si no hay HTML suficiente
+        // 2) Fallback a fetch normal si ScraperAPI falla o no está disponible
         if (!rawHtml || rawHtml.length < 5000) {
-          const oxyUser = Deno.env.get('OXYLABS_USERNAME');
-          const oxyPass = Deno.env.get('OXYLABS_PASSWORD');
-          if (oxyUser && oxyPass) {
-            const auth = btoa(`${oxyUser}:${oxyPass}`);
-            const oxyResp = await fetch('https://realtime.oxylabs.io/v1/queries', {
-              method: 'POST',
+          console.log('⚠️ ScraperAPI failed or unavailable, trying normal fetch...');
+          try {
+            const acceptLang = language === 'en' ? 'en-US,en;q=0.9' : language === 'zh' ? 'zh-CN,zh;q=0.9,en;q=0.7' : 'es-ES,es;q=0.9,en;q=0.8';
+            const resp = await fetch(url, {
               headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${auth}`,
+                'User-Agent': getRandomUserAgent(),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': acceptLang,
+                'Cache-Control': 'no-cache',
+                'Referer': new URL(url).origin,
               },
-              body: JSON.stringify({
-                source: 'universal',
-                url,
-                render: 'html',
-                parse: false,
-                user_agent_type: 'desktop_chrome',
-                geo_location: 'United States',
-              }),
+              redirect: 'follow',
             });
-            if (oxyResp.ok) {
-              const oxyData = await oxyResp.json();
-              rawHtml = oxyData.results?.[0]?.content || rawHtml;
+            if (resp.ok) {
+              rawHtml = await resp.text();
+              console.log(`✅ Normal fetch success, HTML length: ${rawHtml.length}`);
             }
+          } catch (e) {
+            console.error('❌ Normal fetch also failed:', e);
           }
+        }
+
+        // 3) Verificar que tenemos HTML suficiente
+        if (!rawHtml || rawHtml.length < 1000) {
+          console.error(`❌ No HTML content obtained for ${url}`);
+          return { url, products: [], storeName };
         }
 
         const sanitizedHtml = (rawHtml || '')
@@ -332,15 +335,25 @@ serve(async (req) => {
 
         const langLabel = language === 'en' ? 'English' : language === 'zh' ? '中文' : 'Español';
 
-        const systemPrompt = `Eres un analista experto en e-commerce de moda. Devuelve SOLO JSON válido. La explicación/recommendation debe estar en ${langLabel}. Es CRÍTICO que cada producto sea ÚNICO y DIFERENTE - no repitas productos similares.`;
-        const userPrompt = `Extrae 20-25 productos ÚNICOS Y DIFERENTES de ropa de mujer del HTML proporcionado. Usa baseUrl para resolver imágenes relativas. Mantén los títulos y precios tal como aparecen. recommendation en ${langLabel}.
+        const systemPrompt = `Eres un analista experto en e-commerce de moda y extracción masiva de productos. Devuelve SOLO JSON válido. La explicación/recommendation debe estar en ${langLabel}. Es CRÍTICO que cada producto sea ÚNICO y DIFERENTE - no repitas productos similares.`;
+        const userPrompt = `Extrae entre 25 y 40 productos ÚNICOS Y DIFERENTES de ropa de mujer del HTML proporcionado. ESCANEA TODO EL HTML proporcionado, no te detengas en los primeros productos. Busca en todos los contenedores de grid de productos.
 
-IMPORTANTE: 
+MANEJO DE IMÁGENES (CRÍTICO):
+- Las imágenes con lazy loading pueden estar en atributos: data-src, data-lazy-src, data-url, data-image-src, data-original
+- Si el atributo "src" contiene placeholder, transparent.gif, loading.gif o es muy pequeño (<100 bytes), busca en los atributos data-*
+- Si NO encuentras imagen válida, NO descartes el producto - déjalo con imagen vacía o placeholder
+- REGLA DE ORO: Es mejor tener el producto sin foto que no tenerlo
+- Usa baseUrl (${baseUrl}) para resolver URLs relativas
+- Las imágenes finales deben ser URLs absolutas y válidas
+
+EXTRACCIÓN MASIVA:
+- Busca TODOS los productos en el HTML, no solo los primeros
+- Objetivo: 25-40 productos únicos
 - Cada producto debe ser COMPLETAMENTE DIFERENTE (diferentes estilos, colores, tipos de prenda)
 - Prioriza VARIEDAD sobre cantidad
 - Selecciona los productos con MEJOR trend score y calidad
 - NO incluyas productos duplicados o muy similares
-- Las imágenes deben ser URLs absolutas y válidas
+- Mantén los títulos y precios tal como aparecen
 
 URL: ${url}
 Base URL: ${baseUrl}
@@ -350,7 +363,7 @@ PRODUCTOS REFERENCIA:\n${productosCatalogo.map(p => `• ${p.titulo} - ${p.recom
 HTML:\n${sanitizedHtml}
 
 Formato exacto:
-{ "url": "${url}", "products": [ { "title": "..", "price": "..", "colors": [".."], "sizes": [".."], "image": "https://..", "trend_score": 8.5, "recommendation": "..", "priority": "high" } ] }`;
+{ "url": "${url}", "products": [ { "title": "..", "price": "..", "colors": [".."], "sizes": [".."], "image": "https://.." o "", "trend_score": 8.5, "recommendation": "..", "priority": "high" } ] }`;
 
         console.log(`🤖 Llamando a Lovable AI para analizar ${storeName}...`);
         
@@ -382,7 +395,7 @@ Formato exacto:
         content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const parsed = JSON.parse(content);
 
-        const products = (parsed.products || []).slice(0, 25).map((p: any) => ({
+        const products = (parsed.products || []).slice(0, 40).map((p: any) => ({
           title: String(p.title || '').slice(0, 140),
           price: String(p.price || ''),
           colors: Array.isArray(p.colors) ? p.colors : [],
