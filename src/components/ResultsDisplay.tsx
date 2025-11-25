@@ -143,7 +143,7 @@ export const ResultsDisplay = ({ results }: ResultsDisplayProps) => {
         {results.products.map((product, index) => (
           <Card key={index} className="p-6 hover:shadow-xl transition-all border-2 hover:border-primary/30 relative">
             {product.image && (
-              <div data-img-container className="mb-4 rounded-lg overflow-hidden bg-muted aspect-square">
+              <div className="mb-4 rounded-lg overflow-hidden bg-muted aspect-square">
                 <img
                   src={proxiedImage(makeAbsolute(product.image))}
                   alt={product.title}
@@ -156,10 +156,9 @@ export const ResultsDisplay = ({ results }: ResultsDisplayProps) => {
                       e.currentTarget.dataset.fallback = "direct";
                       e.currentTarget.src = direct;
                     } else {
-                      const container = e.currentTarget.closest('[data-img-container]') as HTMLElement | null;
-                      if (container) {
-                        container.style.display = 'none';
-                      }
+                      // Mostrar placeholder en lugar de esconder
+                      e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Crect fill='%23f1f5f9' width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='16' fill='%2394a3b8'%3ESin imagen%3C/text%3E%3C/svg%3E";
+                      e.currentTarget.dataset.fallback = "placeholder";
                     }
                   }}
                 />
