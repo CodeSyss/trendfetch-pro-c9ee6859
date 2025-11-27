@@ -168,18 +168,54 @@ serve(async (req) => {
         const htmlForAnalysis = cleanHtml.slice(0, 200000);
 
         const langLabel = language === 'en' ? 'English' : language === 'zh' ? '中文' : 'Español';
+        
+        // Mapeo de categorías para el filtro
+        const categoryMap: Record<string, string[]> = {
+          'vestidos': ['dress', 'vestido', 'dresses', 'vestidos'],
+          'blusas': ['blouse', 'blusa', 'top', 'shirt', 'camisa', 'camiseta'],
+          'pantalones': ['pants', 'pantalon', 'jeans', 'trousers', 'pantalones'],
+          'faldas': ['skirt', 'falda', 'skirts', 'faldas'],
+          'abrigos': ['coat', 'jacket', 'abrigo', 'chaqueta', 'blazer', 'cardigan'],
+          'accesorios': ['accessory', 'accesorio', 'bag', 'bolso', 'jewelry', 'joyeria'],
+          'todos': []
+        };
+        
+        const selectedCategories = categories === 'todos' 
+          ? 'todas las categorías de ropa de mujer' 
+          : categoryMap[categories]?.join(', ') || categories;
+        
+        const categoryFilter = categories !== 'todos' 
+          ? `\n⚠️ FILTRO OBLIGATORIO: Solo extraer productos de la categoría "${categories}" (${selectedCategories}). IGNORA completamente cualquier producto que no sea de esta categoría.`
+          : '';
 
-        const systemPrompt = `Eres un experto en scraping de e-commerce. Tu trabajo es extraer productos del HTML.
+        const systemPrompt = `Eres un experto en scraping de e-commerce especializado en ROPA DE MUJER.
 REGLAS CRÍTICAS:
 1. Devuelve SOLO JSON válido, sin texto adicional
 2. Extrae 25-50 productos DIFERENTES
 3. Las recomendaciones deben estar en ${langLabel}
 4. Si no encuentras imagen, usa "" (string vacío)
-5. NUNCA descartes un producto por no tener imagen`;
+5. NUNCA descartes un producto por no tener imagen
+6. 🚫 SOLO ROPA DE MUJER - Ignora ropa de hombre, niños, accesorios no relacionados, electrónica, etc.
+7. ${categories !== 'todos' ? `FILTRA ESTRICTAMENTE por categoría: ${categories}` : 'Incluye todas las categorías de ropa femenina'}`;
 
-        const userPrompt = `Extrae productos de este sitio de ${storeName}. 
+        const userPrompt = `Extrae productos de ROPA DE MUJER de este sitio de ${storeName}. 
 
-🎯 OBJETIVO: 25-50 productos únicos con variedad
+🎯 OBJETIVO: 25-50 productos únicos de ROPA FEMENINA
+${categoryFilter}
+
+👗 SOLO INCLUIR ROPA DE MUJER:
+- Vestidos, blusas, tops, camisetas
+- Pantalones, jeans, shorts de mujer
+- Faldas, abrigos, chaquetas femeninas
+- Lencería, pijamas de mujer
+- Ropa deportiva femenina
+
+🚫 EXCLUIR COMPLETAMENTE:
+- Ropa de hombre o unisex
+- Ropa de niños
+- Zapatos (a menos que sea categoría específica)
+- Bolsos, joyas (a menos que sea categoría específica)
+- Electrónica, hogar, mascotas
 
 📸 IMÁGENES - BUSCA EN ESTE ORDEN:
 1. data-src="..."
@@ -220,11 +256,11 @@ ${backupImages.slice(0, 20).join('\n')}
 HTML COMPLETO:
 ${htmlForAnalysis}
 
-RESPONDE SOLO CON ESTE JSON:
+RESPONDE SOLO CON ESTE JSON (SOLO ROPA DE MUJER${categories !== 'todos' ? ` de categoría ${categories}` : ''}):
 {
   "products": [
     {
-      "title": "Nombre del producto",
+      "title": "Nombre del producto de mujer",
       "price": "$XX.XX",
       "colors": ["Negro", "Blanco"],
       "sizes": ["S", "M", "L"],
