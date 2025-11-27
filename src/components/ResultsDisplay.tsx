@@ -142,28 +142,25 @@ export const ResultsDisplay = ({ results }: ResultsDisplayProps) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {results.products.map((product, index) => (
           <Card key={index} className="p-6 hover:shadow-xl transition-all border-2 hover:border-primary/30 relative">
-            {product.image && (
-              <div className="mb-4 rounded-lg overflow-hidden bg-muted aspect-square">
-                <img
-                  src={proxiedImage(makeAbsolute(product.image))}
-                  alt={product.title}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    const direct = makeAbsolute(product.image);
-                    if (e.currentTarget.dataset.fallback !== "direct" && direct) {
-                      e.currentTarget.dataset.fallback = "direct";
-                      e.currentTarget.src = direct;
-                    } else {
-                      // Mostrar placeholder en lugar de esconder
-                      e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Crect fill='%23f1f5f9' width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='16' fill='%2394a3b8'%3ESin imagen%3C/text%3E%3C/svg%3E";
-                      e.currentTarget.dataset.fallback = "placeholder";
-                    }
-                  }}
-                />
-              </div>
-            )}
+            <div className="mb-4 rounded-lg overflow-hidden bg-muted aspect-square">
+              <img
+                src={product.image ? proxiedImage(makeAbsolute(product.image)) : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Crect fill='%23f1f5f9' width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='16' fill='%2394a3b8'%3ESin imagen%3C/text%3E%3C/svg%3E"}
+                alt={product.title}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const direct = makeAbsolute(product.image);
+                  if (e.currentTarget.dataset.fallback !== "direct" && direct) {
+                    e.currentTarget.dataset.fallback = "direct";
+                    e.currentTarget.src = direct;
+                  } else {
+                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Crect fill='%23f1f5f9' width='400' height='400'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='16' fill='%2394a3b8'%3ESin imagen%3C/text%3E%3C/svg%3E";
+                    e.currentTarget.dataset.fallback = "placeholder";
+                  }
+                }}
+              />
+            </div>
             
             <div className="flex items-start justify-between mb-4">
               <Badge className={getPriorityColor(product.priority)}>

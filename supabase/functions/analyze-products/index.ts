@@ -5,218 +5,82 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Productos de referencia para guiar el análisis
-const productosReferencia: any[] = [
-  {
-    "titulo": "Vestido Midi Floral",
-    "recommendation": "Perfecto para primavera/verano con estampados florales modernos",
-    "trend_score": 9.2,
-    "temporada": "caliente",
-    "categoria": "vestidos",
-    "tienda": "shein"
-  },
-  {
-    "titulo": "Top Crop Tejido",
-    "recommendation": "Tendencia en tejidos ligeros para clima cálido",
-    "trend_score": 8.5,
-    "temporada": "caliente",
-    "categoria": "tops",
-    "tienda": "shein"
-  },
-  {
-    "titulo": "Conjunto Playero 2 Piezas",
-    "recommendation": "Ideal para vacaciones de verano, estilo resort",
-    "trend_score": 8.8,
-    "temporada": "caliente",
-    "categoria": "vacaciones",
-    "tienda": "shein"
-  },
-  {
-    "titulo": "Suéter Oversized",
-    "recommendation": "Tejido grueso perfecto para otoño/invierno",
-    "trend_score": 9.0,
-    "temporada": "frio",
-    "categoria": "tejidos",
-    "tienda": "zara"
-  },
-  {
-    "titulo": "Blazer Estructurado",
-    "recommendation": "Pieza versátil para todo el año, estilo corporativo moderno",
-    "trend_score": 8.7,
-    "temporada": "todo el año",
-    "categoria": "tops",
-    "tienda": "zara"
-  },
-  {
-    "titulo": "Vestido Camisero",
-    "recommendation": "Clásico atemporal, funciona en cualquier temporada",
-    "trend_score": 8.9,
-    "temporada": "todo el año",
-    "categoria": "vestidos",
-    "tienda": "hm"
-  },
-  {
-    "titulo": "Pantalón Wide Leg",
-    "recommendation": "Tendencia actual en pantalones de pierna ancha",
-    "trend_score": 9.1,
-    "temporada": "todo el año",
-    "categoria": "pantalones",
-    "tienda": "zara"
-  },
-  {
-    "titulo": "Cardigan Largo Punto",
-    "recommendation": "Perfecto para capas en clima frío",
-    "trend_score": 8.6,
-    "temporada": "frio",
-    "categoria": "tejidos",
-    "tienda": "hm"
-  },
-  {
-    "titulo": "Blusa Satinada",
-    "recommendation": "Elegante y versátil para ocasiones especiales",
-    "trend_score": 8.4,
-    "temporada": "todo el año",
-    "categoria": "tops",
-    "tienda": "forever21"
-  },
-  {
-    "titulo": "Conjunto Deportivo 3 Piezas",
-    "recommendation": "Athleisure trend, cómodo y moderno",
-    "trend_score": 9.3,
-    "temporada": "todo el año",
-    "categoria": "conjuntos",
-    "tienda": "shein"
-  }
-];
-
 // Sistema de caché simple en memoria
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_DURATION = 1000 * 60 * 30; // 30 minutos
-
-// User-Agent pool para rotar
-const userAgents = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-];
-
-const getRandomUserAgent = () => userAgents[Math.floor(Math.random() * userAgents.length)];
-
-// URLs por defecto para categorías específicas de cada tienda
-// IMPORTANTE: El usuario puede modificar estas URLs para agregar más tiendas o categorías
-const defaultStoreUrls: Record<string, Record<string, Record<string, string[]>>> = {
-  'shein': {
-    'caliente': {
-      'vestidos': ['https://us.shein.com/Women-Dresses-c-1727.html'],
-      'tops': ['https://us.shein.com/Women-Tops-c-1733.html'],
-      'vacaciones': ['https://us.shein.com/Women-Swimwear-c-2193.html', 'https://us.shein.com/Women-Beach-Wear-c-2419.html'],
-      'todos': ['https://us.shein.com/trend-women-clothing-c-2030.html']
-    },
-    'frio': {
-      'tejidos': ['https://us.shein.com/Women-Sweaters-c-1734.html'],
-      'tops': ['https://us.shein.com/Women-Tops-c-1733.html'],
-      'todos': ['https://us.shein.com/Women-Clothing-c-1727.html']
-    },
-    'todos': {
-      'todos': ['https://us.shein.com/trend-women-clothing-c-2030.html', 'https://us.shein.com/Women-New-Arrivals-c-2766.html']
-    }
-  },
-  'zara': {
-    'caliente': {
-      'vestidos': ['https://www.zara.com/es/es/mujer-vestidos-l1066.html'],
-      'tops': ['https://www.zara.com/es/es/mujer-camisas-blusas-l1217.html'],
-      'todos': ['https://www.zara.com/es/es/mujer-novedades-l1180.html']
-    },
-    'frio': {
-      'tejidos': ['https://www.zara.com/es/es/mujer-punto-l1152.html'],
-      'todos': ['https://www.zara.com/es/es/mujer-ropa-l1055.html']
-    },
-    'todos': {
-      'todos': ['https://www.zara.com/es/es/mujer-novedades-l1180.html', 'https://www.zara.com/es/es/mujer-ropa-l1055.html']
-    }
-  },
-  'hm': {
-    'caliente': {
-      'vestidos': ['https://www2.hm.com/es_es/mujer/compra-por-producto/vestidos.html'],
-      'tops': ['https://www2.hm.com/es_es/mujer/compra-por-producto/tops-y-camisetas.html'],
-      'todos': ['https://www2.hm.com/es_es/mujer/compra-por-producto.html']
-    },
-    'frio': {
-      'tejidos': ['https://www2.hm.com/es_es/mujer/compra-por-producto/punto.html'],
-      'todos': ['https://www2.hm.com/es_es/mujer/compra-por-producto.html']
-    },
-    'todos': {
-      'todos': ['https://www2.hm.com/es_es/mujer/novedades.html', 'https://www2.hm.com/es_es/mujer/compra-por-producto.html']
-    }
-  },
-  'forever21': {
-    'caliente': {
-      'vestidos': ['https://www.forever21.com/us/shop/catalog/category/f21/dress'],
-      'tops': ['https://www.forever21.com/us/shop/catalog/category/f21/top'],
-      'todos': ['https://www.forever21.com/us/shop/catalog/category/f21/app-main']
-    },
-    'frio': {
-      'tejidos': ['https://www.forever21.com/us/shop/catalog/category/f21/sweater'],
-      'todos': ['https://www.forever21.com/us/shop/catalog/category/f21/app-main']
-    },
-    'todos': {
-      'todos': ['https://www.forever21.com/us/shop/catalog/category/f21/new-arrivals']
-    }
-  }
-};
 
 // Función para obtener el nombre de la tienda desde la URL
 const getStoreName = (url: string): string => {
   try {
     const hostname = new URL(url).hostname;
+    if (hostname.includes('shein')) return 'shein';
+    if (hostname.includes('zara')) return 'zara';
+    if (hostname.includes('hm') || hostname.includes('h&m')) return 'hm';
+    if (hostname.includes('forever21')) return 'forever21';
+    if (hostname.includes('amazon')) return 'amazon';
+    if (hostname.includes('aliexpress')) return 'aliexpress';
     const parts = hostname.split('.');
-    const storeName = parts.length >= 2 ? parts[parts.length - 2] : hostname;
-    return storeName.toLowerCase();
+    return parts.length >= 2 ? parts[parts.length - 2] : hostname;
   } catch {
     return 'unknown';
   }
 };
 
-// Función para detectar si es una homepage y obtener URLs específicas
-const getSpecificUrls = (url: string, season: string, categories: string): string[] => {
-  const storeName = getStoreName(url);
-  const urlObj = new URL(url);
-  const pathname = urlObj.pathname;
-  
-  // Detectar si es homepage (ruta raíz o muy corta)
-  const isHomepage = pathname === '/' || pathname === '' || pathname.length < 10;
-  
-  if (!isHomepage) {
-    console.log(`✓ URL específica detectada para ${storeName}: ${url}`);
-    return [url]; // Ya es una URL específica
+// Función para limpiar y procesar URL de imagen
+const processImageUrl = (imgUrl: string | undefined | null, baseUrl: string): string => {
+  if (!imgUrl || imgUrl === 'null' || imgUrl === 'undefined' || imgUrl.trim() === '') {
+    return '';
   }
   
-  console.log(`🏠 Homepage detectada para ${storeName}, buscando URLs específicas...`);
+  let url = imgUrl.trim();
   
-  // Buscar URLs por defecto para esta tienda
-  const storeUrls = defaultStoreUrls[storeName];
-  if (!storeUrls) {
-    console.log(`⚠️ No hay URLs configuradas para ${storeName}, usando homepage`);
-    return [url];
+  // Remover escapes y caracteres extraños
+  url = url.replace(/\\/g, '');
+  
+  // Si empieza con //, añadir https:
+  if (url.startsWith('//')) {
+    url = 'https:' + url;
   }
   
-  // Buscar por temporada y categoría
-  const seasonUrls = storeUrls[season] || storeUrls['todos'];
-  if (!seasonUrls) {
-    console.log(`⚠️ No hay URLs para temporada ${season} en ${storeName}`);
-    return [url];
+  // Si es relativa, añadir baseUrl
+  if (url.startsWith('/') && !url.startsWith('//')) {
+    url = baseUrl + url;
   }
   
-  const categoryUrls = seasonUrls[categories] || seasonUrls['todos'];
-  if (!categoryUrls || categoryUrls.length === 0) {
-    console.log(`⚠️ No hay URLs para categoría ${categories} en ${storeName}`);
-    return [url];
+  // Verificar que sea una URL válida
+  try {
+    new URL(url);
+    return url;
+  } catch {
+    return '';
+  }
+};
+
+// Función para extraer imágenes directamente del HTML (backup)
+const extractImagesFromHtml = (html: string, baseUrl: string): string[] => {
+  const images: string[] = [];
+  
+  // Patrones para encontrar URLs de imágenes
+  const patterns = [
+    /data-src=["']([^"']+)["']/gi,
+    /data-lazy-src=["']([^"']+)["']/gi,
+    /data-original=["']([^"']+)["']/gi,
+    /data-url=["']([^"']+)["']/gi,
+    /data-image-src=["']([^"']+)["']/gi,
+    /src=["']([^"']+\.(?:jpg|jpeg|png|webp|gif)[^"']*)["']/gi,
+  ];
+  
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+      const imgUrl = processImageUrl(match[1], baseUrl);
+      if (imgUrl && !images.includes(imgUrl)) {
+        images.push(imgUrl);
+      }
+    }
   }
   
-  console.log(`✅ URLs específicas encontradas para ${storeName}: ${categoryUrls.length} URLs`);
-  return categoryUrls;
+  return images.slice(0, 100); // Máximo 100 imágenes
 };
 
 serve(async (req) => {
@@ -226,19 +90,10 @@ serve(async (req) => {
 
   try {
     const { urls, season = 'todos', categories = 'todos', language = 'es' } = await req.json();
-    console.log('📥 Input URLs:', urls, 'Season:', season, 'Categories:', categories, 'Lang:', language);
-
-    // Expandir URLs: si es homepage, reemplazar con URLs específicas
-    const expandedUrls: string[] = [];
-    for (const url of urls) {
-      const specificUrls = getSpecificUrls(url, season, categories);
-      expandedUrls.push(...specificUrls);
-    }
-    
-    console.log('🔍 URLs a analizar después de expansión:', expandedUrls);
+    console.log('📥 Input:', { urls, season, categories, language });
 
     // Verificar caché primero
-    const cacheKey = `${expandedUrls.join('|')}|${season}|${categories}`;
+    const cacheKey = `${urls.join('|')}|${season}|${categories}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
       console.log('🎯 Returning cached results');
@@ -247,111 +102,141 @@ serve(async (req) => {
       });
     }
 
-    if (!expandedUrls || expandedUrls.length === 0) {
+    if (!urls || urls.length === 0) {
       throw new Error('At least one URL is required');
     }
 
-    // Procesar todas las URLs expandidas usando Lovable AI
-    const analysisPromises = expandedUrls.map(async (url: string) => {
+    const SCRAPERAPI_KEY = Deno.env.get('SCRAPERAPI_KEY');
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+
+    if (!SCRAPERAPI_KEY) {
+      console.error('❌ SCRAPERAPI_KEY no configurada');
+      throw new Error('SCRAPERAPI_KEY not configured');
+    }
+
+    if (!LOVABLE_API_KEY) {
+      console.error('❌ LOVABLE_API_KEY no configurada');
+      throw new Error('LOVABLE_API_KEY not configured');
+    }
+
+    // Procesar todas las URLs
+    const analysisPromises = urls.map(async (url: string) => {
       try {
         const storeName = getStoreName(url);
-        console.log(`🏪 Analyzing store: ${storeName}`);
-
-        // Preparar productos de referencia para el prompt
-        const productosCatalogo = productosReferencia.filter((producto) => {
-          const matchTemporada = season === 'todos' || producto.temporada === 'todo el año' || producto.temporada === season;
-          const matchCategoria = categories === 'todos' ||
-            producto.categoria?.toLowerCase().includes(categories.toLowerCase()) ||
-            categories.toLowerCase().includes(producto.categoria?.toLowerCase());
-          const matchTienda = !producto.tienda || producto.tienda.toLowerCase() === storeName;
-          return matchTemporada && matchCategoria && matchTienda;
-        });
-
-        // Intentar ScraperAPI (método principal)
-        let rawHtml = '';
-        const SCRAPERAPI_KEY = Deno.env.get('SCRAPERAPI_KEY');
-        
-        if (!SCRAPERAPI_KEY) {
-          console.error('❌ SCRAPERAPI_KEY no configurada');
-          return { url, products: [], storeName };
-        }
-
-        try {
-          console.log(`🔧 Using ScraperAPI for ${url}...`);
-          // ScraperAPI con render=true para JavaScript y device_type=desktop
-          const targetUrl = encodeURIComponent(url);
-          const scraperUrl = `http://api.scraperapi.com/?api_key=${SCRAPERAPI_KEY}&url=${targetUrl}&render=true&device_type=desktop`;
-          const scraperResp = await fetch(scraperUrl);
-          
-          if (!scraperResp.ok) {
-            console.error(`❌ ScraperAPI error: ${scraperResp.status} ${scraperResp.statusText}`);
-            return { url, products: [], storeName };
-          }
-          
-          rawHtml = await scraperResp.text();
-          console.log(`✅ ScraperAPI success, HTML length: ${rawHtml.length}`);
-          
-          if (rawHtml.length < 5000) {
-            console.error(`❌ HTML too short: ${rawHtml.length} bytes`);
-            return { url, products: [], storeName };
-          }
-        } catch (e) {
-          console.error('❌ ScraperAPI failed:', e);
-          return { url, products: [], storeName };
-        }
-
-        const sanitizedHtml = (rawHtml || '')
-          .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-          .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-          .replace(/<!--[\s\S]*?-->/g, ' ')
-          .replace(/\s+/g, ' ')
-          .slice(0, 160000);
         const baseUrl = new URL(url).origin;
+        console.log(`🏪 Analyzing: ${storeName} - ${url}`);
 
-        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-        if (!LOVABLE_API_KEY) {
-          console.error('❌ LOVABLE_API_KEY no configurada');
-          return { url, products: [], storeName };
+        // Usar ScraperAPI con configuración optimizada
+        console.log(`🔧 Fetching with ScraperAPI...`);
+        const targetUrl = encodeURIComponent(url);
+        const scraperUrl = `http://api.scraperapi.com/?api_key=${SCRAPERAPI_KEY}&url=${targetUrl}&render=true&device_type=desktop&wait_for_selector=.product-card,.product-item,.S-product-card,img`;
+        
+        const scraperResp = await fetch(scraperUrl, {
+          headers: {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          }
+        });
+        
+        if (!scraperResp.ok) {
+          console.error(`❌ ScraperAPI error: ${scraperResp.status}`);
+          throw new Error(`ScraperAPI failed: ${scraperResp.status}`);
         }
+        
+        const rawHtml = await scraperResp.text();
+        console.log(`✅ HTML fetched: ${rawHtml.length} chars`);
+
+        if (rawHtml.length < 3000) {
+          console.error(`❌ HTML too short`);
+          throw new Error('HTML content too short');
+        }
+
+        // Extraer imágenes del HTML como backup
+        const backupImages = extractImagesFromHtml(rawHtml, baseUrl);
+        console.log(`📸 Found ${backupImages.length} images in HTML`);
+
+        // Limpiar HTML para el LLM
+        const cleanHtml = rawHtml
+          .replace(/<script[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[\s\S]*?<\/style>/gi, '')
+          .replace(/<!--[\s\S]*?-->/g, '')
+          .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+          .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        // Tomar una porción más grande del HTML
+        const htmlForAnalysis = cleanHtml.slice(0, 200000);
 
         const langLabel = language === 'en' ? 'English' : language === 'zh' ? '中文' : 'Español';
 
-        const systemPrompt = `Eres un analista experto en e-commerce especializado en Shein y sitios con lazy loading. Devuelve SOLO JSON válido. La explicación/recommendation debe estar en ${langLabel}. EXTRAE 25-40 PRODUCTOS ÚNICOS.`;
-        const userPrompt = `ANALIZA TODO EL HTML y extrae entre 25-40 productos ÚNICOS de ropa de mujer. Busca en TODOS los contenedores de productos (divs de grid, listas, etc).
+        const systemPrompt = `Eres un experto en scraping de e-commerce. Tu trabajo es extraer productos del HTML.
+REGLAS CRÍTICAS:
+1. Devuelve SOLO JSON válido, sin texto adicional
+2. Extrae 25-50 productos DIFERENTES
+3. Las recomendaciones deben estar en ${langLabel}
+4. Si no encuentras imagen, usa "" (string vacío)
+5. NUNCA descartes un producto por no tener imagen`;
 
-🔴 IMÁGENES LAZY-LOADED (MUY IMPORTANTE):
-Shein y otras tiendas usan lazy loading. Las imágenes NO están en "src", están en:
-- data-src
-- data-lazy-src  
-- data-url
-- data-image-src
-- data-original
-- Si src empieza con "//" añade "https:" al inicio
-- Si la URL es relativa, añade baseUrl: ${baseUrl}
-- Si NO encuentras imagen, pon image: "" (NUNCA descartes el producto)
-- REGLA: Producto sin foto > No tener el producto
+        const userPrompt = `Extrae productos de este sitio de ${storeName}. 
 
-📦 EXTRACCIÓN AGRESIVA:
-- Busca en TODO el HTML (no solo primeros 10 productos)
-- Objetivo MÍNIMO: 25 productos, IDEAL: 35-40
-- Cada producto DEBE ser DIFERENTE (distintos estilos, colores, tipos)
-- Prioriza productos con mejor trend_score
-- NO repitas productos similares
-- Mantén títulos y precios originales
+🎯 OBJETIVO: 25-50 productos únicos con variedad
+
+📸 IMÁGENES - BUSCA EN ESTE ORDEN:
+1. data-src="..."
+2. data-lazy-src="..."  
+3. data-original="..."
+4. data-image-src="..."
+5. src="..." (si contiene .jpg, .png, .webp)
+6. Si URL empieza con // → añade https:
+7. Si es relativa /path → añade ${baseUrl}
+8. Si no hay imagen → usa "" (NUNCA descartes el producto)
+
+💰 PRECIOS:
+- Busca precios en formato $XX.XX, €XX.XX, XX€
+- Incluye moneda original
+
+🏷️ COLORES Y TALLAS:
+- Extrae si están disponibles
+- Si no hay, usa arrays vacíos []
+
+📊 TREND SCORE (1-10):
+- 9-10: Muy tendencia, bestseller
+- 7-8: Popular, buenas ventas
+- 5-6: Normal
+- <5: Básico
+
+🔴 PRIORIDAD:
+- "high": trend_score >= 8
+- "medium": trend_score >= 6
+- "low": trend_score < 6
 
 URL: ${url}
-Base URL: ${baseUrl}
+BASE: ${baseUrl}
+TIENDA: ${storeName}
 
-PRODUCTOS REFERENCIA:
-${productosCatalogo.map(p => `• ${p.titulo} - ${p.recommendation} [${p.trend_score}/10]`).join('\n') || '• (sin referencias)'}
+Imágenes encontradas en HTML (úsalas como referencia):
+${backupImages.slice(0, 20).join('\n')}
 
-HTML:
-${sanitizedHtml}
+HTML COMPLETO:
+${htmlForAnalysis}
 
-FORMATO JSON EXACTO:
-{ "url": "${url}", "products": [ { "title": "..", "price": "..", "colors": [".."], "sizes": [".."], "image": "https://.." o "", "trend_score": 8.5, "recommendation": "..", "priority": "high" } ] }`;
+RESPONDE SOLO CON ESTE JSON:
+{
+  "products": [
+    {
+      "title": "Nombre del producto",
+      "price": "$XX.XX",
+      "colors": ["Negro", "Blanco"],
+      "sizes": ["S", "M", "L"],
+      "image": "https://...",
+      "trend_score": 8.5,
+      "recommendation": "Explicación en ${langLabel}",
+      "priority": "high"
+    }
+  ]
+}`;
 
-        console.log(`🤖 Llamando a Lovable AI para analizar ${storeName}...`);
+        console.log(`🤖 Calling Lovable AI...`);
         
         const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
           method: 'POST',
@@ -365,106 +250,141 @@ FORMATO JSON EXACTO:
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt }
             ],
-            temperature: 0.7,
-            max_tokens: 8192,
+            max_tokens: 16000,
           }),
         });
 
         if (!response.ok) {
-          const text = await response.text();
-          console.error(`Lovable AI error ${response.status}: ${text}`);
-          return { url, products: [], storeName };
+          const errText = await response.text();
+          console.error(`❌ AI error ${response.status}: ${errText}`);
+          throw new Error(`AI failed: ${response.status}`);
         }
 
         const data = await response.json();
         let content = data.choices?.[0]?.message?.content || '';
-        content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const parsed = JSON.parse(content);
+        
+        // Limpiar respuesta
+        content = content
+          .replace(/```json\n?/g, '')
+          .replace(/```\n?/g, '')
+          .replace(/^\s*{\s*"products"/, '{"products"')
+          .trim();
 
-        const products = (parsed.products || []).slice(0, 40).map((p: any) => ({
-          title: String(p.title || '').slice(0, 140),
-          price: String(p.price || ''),
-          colors: Array.isArray(p.colors) ? p.colors : [],
-          sizes: Array.isArray(p.sizes) ? p.sizes : [],
-          image: p.image,
-          trend_score: Number(p.trend_score || 0),
-          recommendation: String(p.recommendation || ''),
-          priority: (p.priority === 'high' || p.priority === 'medium') ? p.priority : 'low',
-          store: storeName,
-          store_url: url,
-        }));
+        // Intentar parsear JSON
+        let parsed;
+        try {
+          parsed = JSON.parse(content);
+        } catch (e) {
+          // Intentar encontrar JSON válido en la respuesta
+          const jsonMatch = content.match(/\{[\s\S]*"products"[\s\S]*\}/);
+          if (jsonMatch) {
+            parsed = JSON.parse(jsonMatch[0]);
+          } else {
+            console.error('❌ Could not parse AI response');
+            throw new Error('Invalid AI response');
+          }
+        }
 
+        console.log(`✅ Parsed ${parsed.products?.length || 0} products from AI`);
+
+        // Procesar productos
+        const products = (parsed.products || []).map((p: any, index: number) => {
+          // Procesar imagen
+          let imageUrl = processImageUrl(p.image, baseUrl);
+          
+          // Si no hay imagen, intentar usar una del backup
+          if (!imageUrl && backupImages[index]) {
+            imageUrl = backupImages[index];
+          }
+
+          return {
+            title: String(p.title || 'Producto').slice(0, 150),
+            price: String(p.price || 'N/A'),
+            colors: Array.isArray(p.colors) ? p.colors : [],
+            sizes: Array.isArray(p.sizes) ? p.sizes : [],
+            image: imageUrl,
+            trend_score: Math.min(10, Math.max(1, Number(p.trend_score) || 5)),
+            recommendation: String(p.recommendation || ''),
+            priority: ['high', 'medium', 'low'].includes(p.priority) ? p.priority : 'medium',
+            store: storeName,
+            store_url: url,
+          };
+        });
+
+        console.log(`📦 Processed ${products.length} products for ${storeName}`);
         return { url, products, storeName };
+
       } catch (error) {
-        const storeName = getStoreName(url);
-        console.error(`Error processing ${url}:`, error);
-        return { url, products: [], storeName };
+        console.error(`❌ Error processing ${url}:`, error);
+        return { url, products: [], storeName: getStoreName(url), error: String(error) };
       }
     });
 
-    // Esperar a que todas las URLs se procesen
+    // Esperar resultados
     const allResults = await Promise.all(analysisPromises);
 
+    // Combinar productos
+    let allProducts = allResults.flatMap(r => r.products);
+    console.log(`📊 Total products before dedup: ${allProducts.length}`);
 
-    // Combinar todos los productos
-    const allProducts = allResults.flatMap(result => result.products);
-
-    // Deduplicación: eliminar productos con títulos muy similares o imágenes duplicadas
+    // Deduplicación
     const uniqueProducts: any[] = [];
     const seenTitles = new Set<string>();
     const seenImages = new Set<string>();
     
     for (const product of allProducts) {
-      const normalizedTitle = product.title.toLowerCase().trim().slice(0, 50);
-      const imageUrl = product.image?.toLowerCase();
+      const normalizedTitle = product.title.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 40);
+      const imageKey = product.image?.toLowerCase().split('?')[0] || '';
       
-      if (!seenTitles.has(normalizedTitle) && (!imageUrl || !seenImages.has(imageUrl))) {
+      const titleExists = seenTitles.has(normalizedTitle);
+      const imageExists = imageKey && seenImages.has(imageKey);
+      
+      if (!titleExists && !imageExists) {
         uniqueProducts.push(product);
         seenTitles.add(normalizedTitle);
-        if (imageUrl) seenImages.add(imageUrl);
+        if (imageKey) seenImages.add(imageKey);
       }
     }
 
-    // Mezcla aleatoria
-    const shuffledProducts = uniqueProducts.sort(() => Math.random() - 0.5);
+    console.log(`✅ Unique products: ${uniqueProducts.length}`);
 
-    // Recalcular resumen
-    const totalProducts = shuffledProducts.length;
+    // Ordenar por trend_score
+    uniqueProducts.sort((a, b) => b.trend_score - a.trend_score);
+
+    // Calcular resumen
+    const totalProducts = uniqueProducts.length;
     const avgScore = totalProducts > 0 
-      ? shuffledProducts.reduce((sum: number, p: any) => sum + p.trend_score, 0) / totalProducts 
+      ? uniqueProducts.reduce((sum, p) => sum + p.trend_score, 0) / totalProducts 
       : 0;
-    const recommendedImport = shuffledProducts.filter((p: any) => p.priority === "high").length;
+    const recommendedImport = uniqueProducts.filter(p => p.priority === 'high').length;
 
     const finalResult = {
-      urls: expandedUrls,
-      products: shuffledProducts,
+      urls,
+      products: uniqueProducts,
       summary: {
         total_products: totalProducts,
         avg_trend_score: Number(avgScore.toFixed(1)),
         recommended_import: recommendedImport,
-        stores_analyzed: expandedUrls.length
+        stores_analyzed: urls.length
       }
     };
 
     // Guardar en caché
     cache.set(cacheKey, { data: finalResult, timestamp: Date.now() });
-    console.log('💾 Results cached');
+    console.log('💾 Cached results');
 
     return new Response(JSON.stringify(finalResult), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error: any) {
-    console.error('Error in analyze-products:', error);
+    console.error('❌ Error:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Error analyzing products',
-        details: error.toString()
-      }), 
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+        error: error.message || 'Analysis failed',
+        details: String(error)
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
